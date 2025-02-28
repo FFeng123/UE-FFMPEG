@@ -193,6 +193,7 @@ public class FFengFFMPEG : ModuleRules
                 "MovieSceneCapture",
                 "RHI",
                 "RenderCore",
+                "AudioMixer",
             }
             );
 

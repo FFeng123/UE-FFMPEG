@@ -187,21 +187,21 @@ bool UFFmpegEncoder::Initialize_Director_Base(FString OutFileName, bool UseGPU, 
 	bool isUsePipe = OutFileName.Find("pipe:") == 0;
 	if (isUseRTMP)
 	{
-		if (avformat_alloc_output_context2(&out_format_context, NULL, "flv", TCHAR_TO_ANSI(*OutFileName)) < 0)
+		if (avformat_alloc_output_context2(&out_format_context, NULL, "flv", TCHAR_TO_UTF8(*OutFileName)) < 0)
 		{
 			return false;
 		}
 	}
 	else if (isUsePipe) {
-		if (avformat_alloc_output_context2(&out_format_context, NULL, "mpegts", TCHAR_TO_ANSI(*OutFileName)) < 0)
+		if (avformat_alloc_output_context2(&out_format_context, NULL, "mpegts", TCHAR_TO_UTF8(*OutFileName)) < 0)
 		{
 			return false;
 		}
-		sscanf(TCHAR_TO_ANSI(*OutFileName), "pipe:%llu", (unsigned long long int*) & hPipe);
+		sscanf(TCHAR_TO_UTF8(*OutFileName), "pipe:%llu", (unsigned long long int*) & hPipe);
 	}
 	else
 	{
-		if (avformat_alloc_output_context2(&out_format_context, NULL, NULL, TCHAR_TO_ANSI(*OutFileName)) < 0)
+		if (avformat_alloc_output_context2(&out_format_context, NULL, NULL, TCHAR_TO_UTF8(*OutFileName)) < 0)
 		{
 			return false;
 		}
@@ -217,7 +217,7 @@ bool UFFmpegEncoder::Initialize_Director_Base(FString OutFileName, bool UseGPU, 
 	}
 
 	//create video encoder
-	if (!Create_Video_Encoder(UseGPU, isUsePipe ? NULL : TCHAR_TO_ANSI(*OutFileName), VideoBitRate)) {
+	if (!Create_Video_Encoder(UseGPU, isUsePipe ? NULL : TCHAR_TO_UTF8(*OutFileName), VideoBitRate)) {
 		return false;
 	}
 	if (!Alloc_Video_Filter()) {
@@ -236,6 +236,9 @@ bool UFFmpegEncoder::Initialize_Director_Base(FString OutFileName, bool UseGPU, 
 	AddTickFunction();
 
 	AddToRoot();
+#if WITH_EDITOR
+	EndPIEDelegateHandle = FEditorDelegates::PrePIEEnded.AddUObject(this, &UFFmpegEncoder::EndWindowReader);
+#endif
 	return true;
 }
 
@@ -272,10 +275,10 @@ void UFFmpegEncoder::AddEndFunction()
 		auto worldType = world->WorldType;
 		if (worldType == EWorldType::Game)
 			FSlateApplication::Get().GetRenderer()->OnSlateWindowDestroyed().AddUObject(this, &UFFmpegEncoder::EndWindowReader_StandardGame);
-	#if WITH_EDITOR
+#if WITH_EDITOR
 		if (worldType == EWorldType::PIE)
 			FEditorDelegates::EndPIE.AddUObject(this, &UFFmpegEncoder::EndWindowReader);
-	#endif // WITH_EDITOR
+#endif // WITH_EDITOR
 	}
 
 }
@@ -649,7 +652,7 @@ bool UFFmpegEncoder::Alloc_Video_Filter()
 	inputs->pad_idx = 0;
 	inputs->next = NULL;
 
-	if ((ret = avfilter_graph_parse_ptr(filter_graph, TCHAR_TO_ANSI(*filter_descr),
+	if ((ret = avfilter_graph_parse_ptr(filter_graph, TCHAR_TO_UTF8(*filter_descr),
 		&inputs, &outputs, NULL)) < 0)
 	{
 		return false;
