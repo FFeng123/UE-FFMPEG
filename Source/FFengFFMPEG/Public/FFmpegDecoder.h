@@ -97,6 +97,7 @@ protected:
 	AVCodecContext* video_codec_ctx;
 	AVCodec* video_codec;
 	double video_frame_rate;
+	double video_starttime;
 	double video_basetime;
 	bool video_enable;
 	TCircularQueue<void*> video_frame_queue = TCircularQueue<void*>(5);
@@ -106,6 +107,7 @@ protected:
 	uint32 audio_stream_index;
 	AVCodecContext* audio_codec_ctx;
 	AVCodec* audio_codec;
+	double audio_starttime;
 	double audio_basetime;
 	bool audio_enable;
 	TCircularQueue<float> audio_frame_queue = TCircularQueue<float>(FFeng_FFMPEG_SAMPLE_RATE * 2 / 10);
@@ -115,8 +117,6 @@ protected:
 	int video_buffer_size;
 	UPROPERTY()
 	UTexture2D* texture;
-
-	const double SYNC_THRESHOLD = 0.2; // 同步阈值
 
 	TSharedPtr<FRunnableThread> decode_thread;
 	TSharedPtr<FDecoderRunnable> decode_runnable;

@@ -17,13 +17,13 @@ UFFmpegDecoder::UFFmpegDecoder() :
 	video_codec_ctx(nullptr),
 	video_codec(nullptr),
 	video_frame_rate(0),
-	video_basetime(0),
+	video_starttime(0),
 	video_enable(false),
 	video_current_pts(0),
 	audio_stream_index(0),
 	audio_codec_ctx(nullptr),
 	audio_codec(nullptr),
-	audio_basetime(0),
+	audio_starttime(0),
 	audio_enable(false),
 	audio_current_pts(0),
 	residue_time(0),
@@ -237,7 +237,8 @@ bool UFFmpegDecoder::OpenVideo()
 
 	AVStream* stream = pFormatCtx->streams[video_stream_index];
 	video_frame_rate = av_q2d(stream->avg_frame_rate);
-	video_basetime = stream->start_time != AV_NOPTS_VALUE ? stream->start_time * av_q2d(stream->time_base) : 0;
+	video_basetime = av_q2d(stream->time_base);
+	video_starttime = stream->start_time != AV_NOPTS_VALUE ? stream->start_time * video_basetime : 0;
 	// 转换缓冲区
 	sws_ctx = sws_getContext(
 		video_width, video_height, video_codec_ctx->pix_fmt,
@@ -289,7 +290,8 @@ bool UFFmpegDecoder::OpenAudio()
 	}
 
 	AVStream* stream = pFormatCtx->streams[audio_stream_index];
-	audio_basetime = stream->start_time != AV_NOPTS_VALUE ? pFormatCtx->streams[audio_stream_index]->start_time * av_q2d(pFormatCtx->streams[audio_stream_index]->time_base) : 0;
+	audio_basetime = av_q2d(stream->time_base);
+	audio_starttime = stream->start_time != AV_NOPTS_VALUE ? stream->start_time * audio_basetime : 0;
 
 	return true;
 
@@ -298,8 +300,6 @@ bool UFFmpegDecoder::OpenAudio()
 void UFFmpegDecoder::Poll()
 {
 	AVPacket packet;
-
-	const double frame_duration = 1.0 / (video_enable ? video_frame_rate : 60);
 
 	double lasttime = FPlatformTime::Seconds();
 
@@ -311,9 +311,10 @@ void UFFmpegDecoder::Poll()
 		residue_time += now - lasttime;
 		lasttime = now;
 
-		if (residue_time < frame_duration)
+		if (residue_time < 0)
 		{
-			FPlatformProcess::Sleep(frame_duration);
+			FPlatformProcess::Sleep(-residue_time);
+			continue;
 		}
 
 		if (av_read_frame(pFormatCtx, &packet) < 0) {
@@ -333,13 +334,7 @@ void UFFmpegDecoder::Poll()
 
 		// 时间戳转换
 		double pts = (packet.pts == AV_NOPTS_VALUE) ? packet.dts : packet.pts;
-		pts *= av_q2d(pFormatCtx->streams[stream_index]->time_base);
-
-		// 同步检查：丢弃落后于主时钟超过阈值的包
-		if (master_clock - pts > SYNC_THRESHOLD) {
-			av_packet_unref(&packet);
-			continue;
-		}
+		pts *= is_video ? video_basetime : audio_basetime;
 
 		// 发送数据包到解码器
 		AVCodecContext* codec_ctx = is_video ? video_codec_ctx : audio_codec_ctx;
@@ -353,11 +348,9 @@ void UFFmpegDecoder::Poll()
 		if (is_video) {
 			AVFrame* frame = av_frame_alloc();
 			while (avcodec_receive_frame(video_codec_ctx, frame) >= 0) {
-				// 时间控制：根据帧率限制解码速度
-				if (residue_time < frame_duration) break;
-
-				residue_time -= frame_duration;
-
+				auto new_pts = frame->pts * video_basetime;
+				residue_time -= new_pts - video_current_pts;
+				video_current_pts = frame->pts * video_basetime;
 
 				void* frame_buffer;
 				if (video_frame_queue_free.Dequeue(frame_buffer)) {
@@ -368,7 +361,6 @@ void UFFmpegDecoder::Poll()
 
 					// 将帧送入渲染队列
 					video_frame_queue.Enqueue(frame_buffer);
-					video_current_pts = frame->pts * av_q2d(pFormatCtx->streams[video_stream_index]->time_base);
 				}
 				av_frame_free(&frame);
 
@@ -382,7 +374,7 @@ void UFFmpegDecoder::Poll()
 			AVFrame* frame = av_frame_alloc();
 			while (avcodec_receive_frame(audio_codec_ctx, frame) >= 0) {
 
-				auto new_pts = frame->pts * av_q2d(pFormatCtx->streams[audio_stream_index]->time_base);
+				auto new_pts = frame->pts * audio_basetime;
 
 				if (!video_enable) {
 					residue_time -= new_pts - audio_current_pts;
@@ -421,15 +413,15 @@ bool UFFmpegDecoder::Reset()
 	if (video_codec_ctx != nullptr)
 	{
 		avcodec_flush_buffers(video_codec_ctx);
-		video_basetime = 0;
+		video_starttime = 0;
 	}
 	if (audio_codec_ctx != nullptr)
 	{
 		avcodec_flush_buffers(audio_codec_ctx);
-		video_basetime = 0;
+		video_starttime = 0;
 	}
-	audio_current_pts = audio_basetime;
-	video_current_pts = video_basetime;
+	audio_current_pts = audio_starttime;
+	video_current_pts = video_starttime;
 	return true;
 }
 
