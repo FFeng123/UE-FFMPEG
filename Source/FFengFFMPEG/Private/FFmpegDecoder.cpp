@@ -204,6 +204,16 @@ UFFmpegAudioPlayComponent* UFFmpegDecoder::CreateAudioComponent(AActor* parent)
 	return audio_component;
 }
 
+bool UFFmpegDecoder::IsEnableVideo()
+{
+	return video_enable;
+}
+
+bool UFFmpegDecoder::IsEnableAudio()
+{
+	return audio_enable;
+}
+
 bool UFFmpegDecoder::OpenVideo()
 {
 	video_stream_index = -1;

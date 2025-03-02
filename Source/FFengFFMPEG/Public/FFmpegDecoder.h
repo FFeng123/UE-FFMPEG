@@ -48,7 +48,7 @@ struct FDecoderBeginArgs {
 
 class FDecoderRunnable;
 class UFFmpegAudioPlayComponent;
-UCLASS()
+UCLASS(BlueprintType)
 class FFENGFFMPEG_API UFFmpegDecoder : public UObject
 {
 	GENERATED_BODY()
@@ -66,6 +66,12 @@ public:
 	UTexture2D* GetTexture();
 	UFUNCTION(BlueprintCallable, Category = "FFengFFMPEG", meta = (DisplayName = "创建音频播放组件"))
 	UFFmpegAudioPlayComponent* CreateAudioComponent(AActor* parent);
+
+
+	UFUNCTION(BlueprintPure, Category = "FFengFFMPEG", meta = (DisplayName = "视频流是否有效"))
+	bool IsEnableVideo();
+	UFUNCTION(BlueprintPure, Category = "FFengFFMPEG", meta = (DisplayName = "音频流是否有效"))
+	bool IsEnableAudio();
 
 public:
 	UFFmpegDecoder();
