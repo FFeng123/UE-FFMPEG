@@ -20,7 +20,7 @@ public class FFengFFMPEG : ModuleRules
         get { return Directory.GetParent(ModulePath).Parent.FullName; }
     }
 
-    private void CopyToBinaries(string FilePath, ReadOnlyTargetRules Type)
+    private void CopyToBinaries(string FilePath)
     {
         string binariesDir = Path.Combine(UProjectPath, "Binaries", Target.Platform.ToString());
         string filename = Path.GetFileName(FilePath);
@@ -46,13 +46,14 @@ public class FFengFFMPEG : ModuleRules
         {
             isLibrarySupported = true;
 
-            string libType = "x64_" + (Target.Configuration == UnrealTargetConfiguration.Debug ? "Debug" : "Release");
-            string LibrariesPath = Path.Combine(ThirdPartyPath, "ffmpeg", "libs", libType);
-            string BinariesPath = Path.Combine(ThirdPartyPath, "ffmpeg", "bin", libType);
+            string LibrariesPath = Path.Combine(ThirdPartyPath, "ffmpeg", "libs");
+            string BinariesPath = Path.Combine(ThirdPartyPath, "ffmpeg", "bin");
+
+            PublicRuntimeLibraryPaths.Add(BinariesPath);
+
 
             System.Console.WriteLine("... LibrariesPath ---->" + LibrariesPath);
 
-            string zlibLibName = "zlib" + (Target.Configuration == UnrealTargetConfiguration.Debug ? "d" : "") + ".lib";
 
             PublicAdditionalLibraries.AddRange(
                 new string[]
@@ -61,43 +62,41 @@ public class FFengFFMPEG : ModuleRules
                     Path.Combine(LibrariesPath, "avdevice.lib"),
                     Path.Combine(LibrariesPath, "avfilter.lib"),
                     Path.Combine(LibrariesPath, "avformat.lib"),
-                    Path.Combine(LibrariesPath, "AviSynth.lib"),
-                    Path.Combine(LibrariesPath, "avresample.lib"),
+                    //Path.Combine(LibrariesPath, "AviSynth.lib"),
+                    //Path.Combine(LibrariesPath, "avresample.lib"),
                     Path.Combine(LibrariesPath, "avutil.lib"),
-                    Path.Combine(LibrariesPath, "libmp3lame.lib"),
-                    Path.Combine(LibrariesPath, "libx264.lib"),
+                    //Path.Combine(LibrariesPath, "libmp3lame.lib"),
+                    //Path.Combine(LibrariesPath, "libx264.lib"),
                     Path.Combine(LibrariesPath, "postproc.lib"),
                     Path.Combine(LibrariesPath, "swresample.lib"),
                     Path.Combine(LibrariesPath, "swscale.lib"),
-                    Path.Combine(LibrariesPath, "wavpackdll.lib"),
-                    //Path.Combine(LibrariesPath, zlibLibName),
+                    //Path.Combine(LibrariesPath, "wavpackdll.lib"),
                 }
             );
 
-            string zlibDllName = "zlib" + (Target.Configuration == UnrealTargetConfiguration.Debug ? "d1" : "1") + ".dll";
 
             string[] dllNames =
             {
-                "avcodec-58.dll",
-                "avdevice-58.dll",
-                "avfilter-7.dll",
-                "avformat-58.dll",
-                "AviSynth.dll",
-                "avresample-4.dll",
-                "avutil-56.dll",
-                "libmp3lame.dll",
-                "libx264-157.dll",
-                "postproc-55.dll",
-                "swresample-3.dll",
-                "swscale-5.dll",
-                "wavpackdll.dll",
-				//zlibDllName,
+                "avcodec-61.dll",
+                "avdevice-61.dll",
+                "avfilter-10.dll",
+                "avformat-61.dll",
+                //"AviSynth.dll",
+                //"avresample-4.dll",
+                "avutil-59.dll",
+                //"libmp3lame.dll",
+                //"libx264-157.dll",
+                "postproc-58.dll",
+                "swresample-5.dll",
+                "swscale-8.dll",
+                //"wavpackdll.dll",
 			};
 
             foreach (string dllName in dllNames)
             {
                 PublicDelayLoadDLLs.Add(dllName);
                 RuntimeDependencies.Add(Path.Combine(BinariesPath, dllName), StagedFileType.NonUFS);
+                CopyToBinaries(Path.Combine(BinariesPath, dllName));
             }
 
             if (isLibrarySupported)
@@ -107,33 +106,7 @@ public class FFengFFMPEG : ModuleRules
             }
 
         }
-        else if (Target.Platform == UnrealTargetPlatform.Linux)
-        {
-            // PublicIncludePaths.Add(Path.Combine(GameCrytoPath, "ScriptMurder/GameCryto/"));
-            // PublicAdditionalLibraries.Add(Path.Combine(GameCrytoPath, "ScriptMurder/GameCryto/", "libcryptoppue.a"));
 
-            // PublicIncludePaths.Add(Path.Combine(ThirdPartyPath, "ffmpeg_Linux", "include"));
-
-            // PublicAdditionalLibraries.Add(Path.Combine(ThirdPartyPath, "ffmpeg_Linux/lib/", "libavcodec.a"));
-            // PublicAdditionalLibraries.Add(Path.Combine(ThirdPartyPath, "ffmpeg_Linux/lib/", "libavdevice.a"));
-            // PublicAdditionalLibraries.Add(Path.Combine(ThirdPartyPath, "ffmpeg_Linux/lib/", "libavfilter.a"));
-            // PublicAdditionalLibraries.Add(Path.Combine(ThirdPartyPath, "ffmpeg_Linux/lib/", "libavformat.a"));
-            // PublicAdditionalLibraries.Add(Path.Combine(ThirdPartyPath, "ffmpeg_Linux/lib/", "libavutil.a"));
-            // PublicAdditionalLibraries.Add(Path.Combine(ThirdPartyPath, "ffmpeg_Linux/lib/", "libbz2.a"));
-            // PublicAdditionalLibraries.Add(Path.Combine(ThirdPartyPath, "ffmpeg_Linux/lib/", "libfdk-aac.a"));
-            // PublicAdditionalLibraries.Add(Path.Combine(ThirdPartyPath, "ffmpeg_Linux/lib/", "libmp3lame.a"));
-            // PublicAdditionalLibraries.Add(Path.Combine(ThirdPartyPath, "ffmpeg_Linux/lib/", "libopus.a"));
-            // PublicAdditionalLibraries.Add(Path.Combine(ThirdPartyPath, "ffmpeg_Linux/lib/", "libpostproc.a"));
-            // PublicAdditionalLibraries.Add(Path.Combine(ThirdPartyPath, "ffmpeg_Linux/lib/", "libswresample.a"));
-            // PublicAdditionalLibraries.Add(Path.Combine(ThirdPartyPath, "ffmpeg_Linux/lib/", "libswscale.a"));
-            // PublicAdditionalLibraries.Add(Path.Combine(ThirdPartyPath, "ffmpeg_Linux/lib/", "libvpx.a"));
-            // PublicAdditionalLibraries.Add(Path.Combine(ThirdPartyPath, "ffmpeg_Linux/lib/", "libx264.a"));
-            // PublicAdditionalLibraries.Add(Path.Combine(ThirdPartyPath, "ffmpeg_Linux/lib/", "libx265.a"));
-            // PublicAdditionalLibraries.Add(Path.Combine(ThirdPartyPath, "ffmpeg_Linux/lib/", "libyasm.a"));
-            // PublicAdditionalLibraries.Add(Path.Combine(ThirdPartyPath, "ffmpeg_Linux/lib/", "libz.a"));
-
-
-        }
 
 
         return isLibrarySupported;
@@ -209,7 +182,6 @@ public class FFengFFMPEG : ModuleRules
         {
             PrivateDependencyModuleNames.Add("UnrealEd");
         }
-
         LoadFFmpeg(Target);
         LoadRTMP();
     }

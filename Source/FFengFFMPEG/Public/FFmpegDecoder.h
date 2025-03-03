@@ -42,6 +42,8 @@ struct FDecoderBeginArgs {
 	bool enable_audio;
 	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = "FFengFFMPEG")
 	bool loop;
+	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = "FFengFFMPEG")
+	bool use_DirectShow;
 };
 
 
@@ -77,7 +79,7 @@ public:
 	UFFmpegDecoder();
 
 
-	bool Initialize(FString url, bool enable_video, bool enable_audio);
+	bool Initialize(FString url, bool enable_video, bool enable_audio, bool dshow);
 
 protected:
 	bool OpenVideo();
@@ -101,7 +103,7 @@ protected:
 	int video_width;
 	int video_height;
 	AVCodecContext* video_codec_ctx;
-	AVCodec* video_codec;
+	const AVCodec* video_codec;
 	double video_frame_rate;
 	double video_starttime;
 	double video_basetime;
@@ -112,7 +114,7 @@ protected:
 
 	uint32 audio_stream_index;
 	AVCodecContext* audio_codec_ctx;
-	AVCodec* audio_codec;
+	const AVCodec* audio_codec;
 	double audio_starttime;
 	double audio_basetime;
 	bool audio_enable;

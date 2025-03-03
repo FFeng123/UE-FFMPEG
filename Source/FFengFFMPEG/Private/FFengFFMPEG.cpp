@@ -6,6 +6,7 @@
 
 extern "C" {
 #include "libavformat/avformat.h"
+#include "libavdevice/avdevice.h"
 }
 
 DEFINE_LOG_CATEGORY(LogFFmpeg);
@@ -22,8 +23,11 @@ void FFFengFFMPEGModule::StartupModule()
 	av_log_set_level(AV_LOG_INFO);
 	av_log_set_callback(FFmpegCallback);
 
+	avdevice_register_all();
+
 	UE_LOG(LogFFmpeg, Log, TEXT("FFmpeg AVCodec version: %d.%d.%d"), LIBAVFORMAT_VERSION_MAJOR, LIBAVFORMAT_VERSION_MINOR, LIBAVFORMAT_VERSION_MICRO);
 	UE_LOG(LogFFmpeg, Log, TEXT("FFmpeg license: %s"), UTF8_TO_TCHAR(avformat_license()));
+
 }
 
 void FFFengFFMPEGModule::ShutdownModule()

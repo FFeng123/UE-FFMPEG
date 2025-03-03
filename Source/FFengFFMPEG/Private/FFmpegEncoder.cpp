@@ -156,8 +156,6 @@ bool UFFmpegEncoder::Initialize_Director_RenderTarget(UWorld* World, FRenderTarg
 bool UFFmpegEncoder::Initialize_Director_Base(FString OutFileName, bool UseGPU, int VideoFps, int VideoBitRate, float AudioDelay, float SoundVolume, uint32 Iwidth, uint32 Iheight)
 {
 	// 初始化FFMPEG
-	avfilter_register_all();
-	av_register_all();
 	avformat_network_init();
 
 	audio_delay = AudioDelay;
@@ -307,7 +305,7 @@ void UFFmpegEncoder::CreateEncodeThread()
 
 bool UFFmpegEncoder::Create_Audio_Encoder(const char* audioencoder_name)
 {
-	AVCodec* audioencoder_codec;
+	const AVCodec* audioencoder_codec;
 	audioencoder_codec = avcodec_find_encoder_by_name(audioencoder_name);
 	out_audio_stream = avformat_new_stream(out_format_context, audioencoder_codec);
 	audio_index = out_audio_stream->index;
@@ -322,8 +320,7 @@ bool UFFmpegEncoder::Create_Audio_Encoder(const char* audioencoder_name)
 	audio_encoder_codec_context->codec_type = AVMEDIA_TYPE_AUDIO;
 	audio_encoder_codec_context->sample_rate = 48000;
 	audio_encoder_codec_context->sample_fmt = AV_SAMPLE_FMT_FLTP;
-	audio_encoder_codec_context->channels = 2;
-	audio_encoder_codec_context->channel_layout = AV_CH_LAYOUT_STEREO;
+	av_channel_layout_default(&audio_encoder_codec_context->ch_layout, 2);
 
 	if (out_format_context->oformat->flags & AVFMT_GLOBALHEADER)
 		audio_encoder_codec_context->flags |= AV_CODEC_FLAG_GLOBAL_HEADER;
@@ -345,12 +342,12 @@ bool UFFmpegEncoder::Create_Audio_Encoder(const char* audioencoder_name)
 
 bool UFFmpegEncoder::Create_Video_Encoder(bool is_use_NGPU, const char* out_file_name, int bit_rate)
 {
-	AVCodec* encoder_codec;
+	const AVCodec* encoder_codec;
 	int ret;
 
 	if (is_use_NGPU)
 	{
-		encoder_codec = avcodec_find_encoder_by_name("nvenc_h264");
+		encoder_codec = avcodec_find_encoder_by_name("h264_nvenc");
 	}
 	else
 	{
@@ -384,7 +381,7 @@ bool UFFmpegEncoder::Create_Video_Encoder(bool is_use_NGPU, const char* out_file
 	video_encoder_codec_context->me_range = 16;
 	video_encoder_codec_context->codec_type = AVMEDIA_TYPE_VIDEO;
 	video_encoder_codec_context->profile = FF_PROFILE_H264_BASELINE;
-	video_encoder_codec_context->frame_number = 1;
+	video_encoder_codec_context->frame_num = 1;
 	video_encoder_codec_context->qcompress = 0.8;
 	video_encoder_codec_context->max_qdiff = 4;
 	video_encoder_codec_context->level = 30;
@@ -432,7 +429,7 @@ bool UFFmpegEncoder::Create_Video_Encoder(bool is_use_NGPU, const char* out_file
 			1,														// 可写标志
 			this,													// 传递给回调的opaque数据
 			NULL,													// 读回调（无需）
-			[](void* opaque, uint8_t* buf, int buf_size) {
+			[](void* opaque, const uint8_t* buf, int buf_size) {
 				UFFmpegEncoder* self = (UFFmpegEncoder*)opaque;
 				DWORD written;
 				BOOL success = WriteFile(
@@ -507,12 +504,10 @@ void UFFmpegEncoder::Encode_Audio_Frame(uint8_t* rgb)
 	audio_frame->data[1] = (uint8_t*)outs[1];
 	Set_Audio_Volume(audio_frame);
 
-	if (avcodec_encode_audio2(audio_encoder_codec_context, audio_pkt, audio_frame, &got_output) < 0)
-	{
-		//check(false);
+	if (avcodec_send_frame(audio_encoder_codec_context, audio_frame) < 0) {
+
 	}
-	if (got_output)
-	{
+	while (avcodec_receive_packet(audio_encoder_codec_context, audio_pkt) == 0) {
 		audio_pkt->pts = audio_pkt->dts = av_rescale_q(
 			(CurrentAuidoTime + audio_delay) / av_q2d({ 1,48000 }),
 			{ 1,48000 },

@@ -39,16 +39,20 @@ UFFmpegDecoder::UFFmpegDecoder() :
 }
 
 
-bool UFFmpegDecoder::Initialize(FString url, bool enable_video, bool enable_audio)
+bool UFFmpegDecoder::Initialize(FString url, bool enable_video, bool enable_audio, bool dshow)
 {
 	if (inited) {
 		return false;
 	}
 	inited = true;
-	av_register_all();
 
 
-	if (avformat_open_input(&pFormatCtx, TCHAR_TO_UTF8(*url), NULL, NULL)) {
+	const AVInputFormat* fmt = nullptr;
+	if (dshow) {
+		fmt = av_find_input_format("dshow");
+	}
+
+	if (avformat_open_input(&pFormatCtx, TCHAR_TO_UTF8(*url), fmt, NULL)) {
 		return false;
 	}
 	if (avformat_find_stream_info(pFormatCtx, NULL) < 0) {
@@ -57,6 +61,10 @@ bool UFFmpegDecoder::Initialize(FString url, bool enable_video, bool enable_audi
 
 	video_enable = enable_video && OpenVideo();
 	audio_enable = enable_audio && OpenAudio();
+
+	if (!video_enable && !audio_enable) {
+		return false;
+	}
 
 	// 启动解码线程
 
@@ -135,7 +143,7 @@ UFFmpegDecoder* UFFmpegDecoder::BeginDecodeSession(FDecoderBeginArgs args)
 {
 	UFFmpegDecoder* decoder = NewObject<UFFmpegDecoder>();
 	decoder->loop = args.loop;
-	if (decoder->Initialize(args.url, args.enable_video, args.enable_audio))
+	if (decoder->Initialize(args.url, args.enable_video, args.enable_audio, args.use_DirectShow))
 	{
 		return decoder;
 	}
@@ -230,11 +238,14 @@ bool UFFmpegDecoder::OpenVideo()
 		return false;
 	}
 	// 创建解码器
-	video_codec_ctx = pFormatCtx->streams[video_stream_index]->codec;
-	video_codec = avcodec_find_decoder(video_codec_ctx->codec_id);
-
+	AVCodecParameters* codec_par = pFormatCtx->streams[video_stream_index]->codecpar;
+	video_codec = avcodec_find_decoder(codec_par->codec_id);
 	if (video_codec == NULL)
 	{
+		return false;
+	}
+	video_codec_ctx = avcodec_alloc_context3(video_codec);
+	if (avcodec_parameters_to_context(video_codec_ctx, codec_par) < 0) {
 		return false;
 	}
 
@@ -283,17 +294,20 @@ bool UFFmpegDecoder::OpenAudio()
 		return false;
 	}
 	// 创建解码器
-	audio_codec_ctx = pFormatCtx->streams[audio_stream_index]->codec;
-	audio_codec_ctx->request_channel_layout = AV_CH_LAYOUT_STEREO;
-	audio_codec_ctx->request_sample_fmt = AV_SAMPLE_FMT_FLTP;
-	audio_codec_ctx->sample_rate = FFeng_FFMPEG_SAMPLE_RATE;
-	audio_codec_ctx->channels = 2;
 
-	audio_codec = avcodec_find_decoder(audio_codec_ctx->codec_id);
+
+	AVCodecParameters* codec_par = pFormatCtx->streams[video_stream_index]->codecpar;
+	audio_codec = avcodec_find_decoder(codec_par->codec_id);
 	if (audio_codec == NULL)
 	{
 		return false;
 	}
+	audio_codec_ctx = avcodec_alloc_context3(audio_codec);
+	avcodec_parameters_to_context(audio_codec_ctx, codec_par);
+	audio_codec_ctx->request_sample_fmt = AV_SAMPLE_FMT_FLTP;
+	audio_codec_ctx->sample_rate = FFeng_FFMPEG_SAMPLE_RATE;
+	av_channel_layout_default(&audio_codec_ctx->ch_layout, 2);
+
 	if (avcodec_open2(audio_codec_ctx, audio_codec, NULL) < 0)
 	{
 		return false;
@@ -360,7 +374,7 @@ void UFFmpegDecoder::Poll()
 			while (avcodec_receive_frame(video_codec_ctx, frame) >= 0) {
 				auto new_pts = frame->pts * video_basetime;
 				residue_time -= new_pts - video_current_pts;
-				video_current_pts = frame->pts * video_basetime;
+				video_current_pts = new_pts;
 
 				void* frame_buffer;
 				if (video_frame_queue_free.Dequeue(frame_buffer)) {
@@ -392,7 +406,7 @@ void UFFmpegDecoder::Poll()
 
 				audio_current_pts = new_pts;
 
-				const int NumSamples = frame->nb_samples * frame->channels;
+				const int NumSamples = frame->nb_samples * frame->ch_layout.nb_channels;
 
 				float* Left = (float*)frame->data[0];
 				float* Right = (float*)frame->data[1];
@@ -416,6 +430,8 @@ void UFFmpegDecoder::Poll()
 
 bool UFFmpegDecoder::Reset()
 {
+	audio_current_pts = audio_starttime;
+	video_current_pts = video_starttime;
 	if (av_seek_frame(pFormatCtx, -1, 0, AVSEEK_FLAG_BACKWARD) < 0) {
 		return false;
 	}
@@ -423,15 +439,11 @@ bool UFFmpegDecoder::Reset()
 	if (video_codec_ctx != nullptr)
 	{
 		avcodec_flush_buffers(video_codec_ctx);
-		video_starttime = 0;
 	}
 	if (audio_codec_ctx != nullptr)
 	{
 		avcodec_flush_buffers(audio_codec_ctx);
-		video_starttime = 0;
 	}
-	audio_current_pts = audio_starttime;
-	video_current_pts = video_starttime;
 	return true;
 }
 
